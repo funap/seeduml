@@ -199,6 +199,8 @@ var SequenceParser = class {
     let lastMessageStep = -1;
     let lastMessageFrom = "";
     let lastMessageTo = "";
+    let lastMessageType = "";
+    let lastActivationStep = /* @__PURE__ */ new Map();
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
       const originalLine = line;
@@ -281,13 +283,40 @@ var SequenceParser = class {
         if (act === "activate") {
           if (name === lastMessageTo && lastMessageStep !== -1) {
             diagram.activate(name, lastMessageStep, lastMessageStep, color);
+            lastActivationStep.set(name, lastMessageStep);
           } else {
-            diagram.activate(name, void 0, void 0, color);
+            const step = diagram.nextStep();
+            diagram.activate(name, step, void 0, color);
+            lastActivationStep.set(name, step);
           }
         } else if (act === "deactivate") {
-          diagram.deactivate(name);
+          let shouldAlign = false;
+          if (lastMessageStep !== -1 && lastMessageStep > (lastActivationStep.get(name) ?? -1)) {
+            if (lastMessageType === "arrow") {
+              shouldAlign = name === lastMessageTo || name === lastMessageFrom;
+            } else if (lastMessageType === "dotted") {
+              shouldAlign = name === lastMessageFrom;
+            }
+          }
+          if (shouldAlign) {
+            diagram.deactivate(name, lastMessageStep);
+          } else {
+            diagram.deactivate(name, diagram.nextStep());
+          }
         } else if (act === "destroy") {
-          diagram.destroy(name, diagram.getCurrentStep());
+          let shouldAlign = false;
+          if (lastMessageStep !== -1 && lastMessageStep > (lastActivationStep.get(name) ?? -1)) {
+            if (lastMessageType === "arrow") {
+              shouldAlign = name === lastMessageTo || name === lastMessageFrom;
+            } else if (lastMessageType === "dotted") {
+              shouldAlign = name === lastMessageFrom;
+            }
+          }
+          if (shouldAlign) {
+            diagram.destroy(name, lastMessageStep);
+          } else {
+            diagram.destroy(name, diagram.nextStep());
+          }
         }
         continue;
       }
@@ -338,9 +367,20 @@ var SequenceParser = class {
           if (tag) {
             diagram.addTaggedStep(tag, step);
           }
+          let semanticFrom = from;
+          let semanticTo = to;
+          const isHead = (h) => ["default", "open", "half", "arrow-circle"].includes(h);
+          if (isHead(startHead) && !isHead(arrowHead)) {
+            semanticFrom = to;
+            semanticTo = from;
+          } else if (isHead(arrowHead) && !isHead(startHead)) {
+            semanticFrom = from;
+            semanticTo = to;
+          }
           lastMessageStep = step;
-          lastMessageFrom = from;
-          lastMessageTo = to;
+          lastMessageFrom = semanticFrom;
+          lastMessageTo = semanticTo;
+          lastMessageType = isDotted ? "dotted" : "arrow";
           if (shorthand === "++") {
             if (autoActivColor && autoActivColor.startsWith("#")) {
               const hexContent = autoActivColor.substring(1);
@@ -350,6 +390,7 @@ var SequenceParser = class {
               }
             }
             diagram.activate(to, step, step, autoActivColor);
+            lastActivationStep.set(to, step);
           } else if (shorthand === "--") {
             diagram.deactivate(from, step, step);
           } else if (shorthand === "--++") {
@@ -362,6 +403,7 @@ var SequenceParser = class {
               }
             }
             diagram.activate(to, step, step, autoActivColor);
+            lastActivationStep.set(to, step);
           } else if (shorthand === "++--") {
             if (autoActivColor && autoActivColor.startsWith("#")) {
               const hexContent = autoActivColor.substring(1);
@@ -371,6 +413,7 @@ var SequenceParser = class {
               }
             }
             diagram.activate(from, step, step, autoActivColor);
+            lastActivationStep.set(from, step);
             diagram.deactivate(to, step, step);
           } else if (shorthand === "**") {
             diagram.create(to, step);

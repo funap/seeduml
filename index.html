@@ -104,6 +104,7 @@
             margin-bottom: 24px;
             background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -0.02em;
         }
@@ -554,7 +555,7 @@ end</textarea>
                         Download the SeedUML library and include it in your project.
                     </p>
                     <pre
-                        style="background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; border: 1px solid var(--border); margin-bottom: 15px;"><code style="color: var(--text-main);">&lt;script src="dist/index.min.js"&gt;&lt;/script&gt;</code></pre>
+                        style="background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; border: 1px solid var(--border); margin-bottom: 15px;"><code style="color: var(--text-main);">&lt;script src="dist/seeduml.min.js"&gt;&lt;/script&gt;</code></pre>
                     <p style="color: var(--text-muted); font-size: 14px;">
                         Once loaded, the <code
                             style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">window.seeduml</code>
@@ -656,7 +657,7 @@ C -> S: Request
 S -> C: Response
     &lt;/pre&gt;
 
-    &lt;script src="./dist/seeduml.min.js"&gt;&lt;/script&gt;
+    &lt;script src="dist/seeduml.min.js"&gt;&lt;/script&gt;
     &lt;script&gt;
       seeduml.initialize();
     &lt;/script&gt;
