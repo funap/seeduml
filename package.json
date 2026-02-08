@@ -1,0 +1,26 @@
+{
+  "name": "seeduml",
+  "version": "0.1.0",
+  "description": "PlantUML compatible diagram generator for the web",
+  "main": "dist/seeduml.js",
+  "module": "dist/seeduml.esm.mjs",
+  "browser": "dist/seeduml.js",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "npm run type-check && esbuild src/index.ts --bundle --outfile=dist/seeduml.js --platform=browser --format=iife --global-name=seeduml && esbuild src/index.ts --bundle --minify --outfile=dist/seeduml.min.js --platform=browser --format=iife --global-name=seeduml && esbuild src/index.ts --bundle --outfile=dist/seeduml.esm.mjs --platform=browser --format=esm && esbuild src/index.ts --bundle --minify --outfile=dist/seeduml.esm.min.mjs --platform=browser --format=esm",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "plantuml",
+    "sequence-diagram",
+    "svg",
+    "uml"
+  ],
+  "author": "Atsushi Funakoshi",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}
