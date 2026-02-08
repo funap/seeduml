@@ -32,8 +32,24 @@ export class SequenceParser implements Parser {
                     const normPos = pendingNote.position.toLowerCase();
                     let associationStep: number | undefined;
                     if (pendingNote.participants.length === 0) {
-                        if ((normPos === 'right' || normPos === 'left') && (lastMessageFrom || lastMessageTo)) {
-                            pendingNote.participants = [normPos === 'right' ? lastMessageTo : lastMessageFrom];
+                        if ((normPos === 'right' || normPos === 'left') && lastMessageFrom && lastMessageTo) {
+                            const idxFrom = diagram.participants.findIndex(p => p.name === lastMessageFrom);
+                            const idxTo = diagram.participants.findIndex(p => p.name === lastMessageTo);
+                            if (idxFrom !== -1 && idxTo !== -1) {
+                                const pFrom = diagram.participants[idxFrom];
+                                const pTo = diagram.participants[idxTo];
+                                let isFromLeftOfTo = idxFrom < idxTo;
+                                if (pFrom.order !== undefined && pTo.order !== undefined) {
+                                    isFromLeftOfTo = pFrom.order < pTo.order;
+                                }
+                                if (normPos === 'left') {
+                                    pendingNote.participants = [isFromLeftOfTo ? lastMessageFrom : lastMessageTo];
+                                } else {
+                                    pendingNote.participants = [isFromLeftOfTo ? lastMessageTo : lastMessageFrom];
+                                }
+                            } else {
+                                pendingNote.participants = [lastMessageTo];
+                            }
                             if (lastMessageStep !== -1) {
                                 associationStep = lastMessageStep;
                             }
@@ -259,8 +275,24 @@ export class SequenceParser implements Parser {
                     const normPos = position.toLowerCase();
                     let associationStep: number | undefined;
                     if (participants.length === 0) {
-                        if ((normPos === 'right' || normPos === 'left') && (lastMessageFrom || lastMessageTo)) {
-                            participants = [normPos === 'right' ? lastMessageTo : lastMessageFrom];
+                        if ((normPos === 'right' || normPos === 'left') && lastMessageFrom && lastMessageTo) {
+                            const idxFrom = diagram.participants.findIndex(p => p.name === lastMessageFrom);
+                            const idxTo = diagram.participants.findIndex(p => p.name === lastMessageTo);
+                            if (idxFrom !== -1 && idxTo !== -1) {
+                                const pFrom = diagram.participants[idxFrom];
+                                const pTo = diagram.participants[idxTo];
+                                let isFromLeftOfTo = idxFrom < idxTo;
+                                if (pFrom.order !== undefined && pTo.order !== undefined) {
+                                    isFromLeftOfTo = pFrom.order < pTo.order;
+                                }
+                                if (normPos === 'left') {
+                                    participants = [isFromLeftOfTo ? lastMessageFrom : lastMessageTo];
+                                } else {
+                                    participants = [isFromLeftOfTo ? lastMessageTo : lastMessageFrom];
+                                }
+                            } else {
+                                participants = [lastMessageTo];
+                            }
                             if (lastMessageStep !== -1) {
                                 associationStep = lastMessageStep;
                             }

@@ -335,8 +335,9 @@ export class LayoutEngine {
         diagram.notes.forEach(n => {
             const lines = n.text.split('\n');
             const noteHeight = lines.length * 20 + 10;
-            topExtension[n.step] = Math.max(topExtension[n.step], noteHeight / 2 - 10);
-            bottomExtension[n.step] = Math.max(bottomExtension[n.step], noteHeight / 2 + 10);
+            // Center the note at the step height, regardless of whether there's a message
+            topExtension[n.step] = Math.max(topExtension[n.step], noteHeight / 2);
+            bottomExtension[n.step] = Math.max(bottomExtension[n.step], noteHeight / 2);
         });
 
         diagram.messages.forEach(m => {
@@ -529,7 +530,8 @@ export class LayoutEngine {
             const minWidth = 60;
             const noteWidth = Math.max(calculatedWidth, minWidth);
             const noteHeight = lines.length * 20 + 10;
-            const y = stepY[note.step] - (noteHeight / 2) + 10;
+            // Align the note center with the step Y (where the arrow is)
+            const y = stepY[note.step] - (noteHeight / 2);
             let x = 0;
 
             if (note.position === 'across') {
@@ -552,34 +554,39 @@ export class LayoutEngine {
                     const cx = relpCenterX[pIdx];
                     const key = `${note.step}-${pIdx}-${note.position}`;
 
+                    const participant = participants[pIdx];
                     const halfWidth = pWidths[pIdx] / 2;
+                    const isCreatedStep = note.step === participant.createdStep;
+                    const effectiveBoxOffset = isCreatedStep ? halfWidth : 0;
+
                     if (note.position === 'left') {
-                        const currentRightEdge = stepOccupancy.get(key) ?? (cx - halfWidth - 5);
+                        const currentRightEdge = stepOccupancy.get(key) ?? (cx - effectiveBoxOffset - 5);
                         x = currentRightEdge - noteWidth;
                         stepOccupancy.set(key, x - 10);
                     } else {
                         // Check if there's a self-message at this step for this participant
                         const selfMessage = diagram.messages.find(m =>
                             m.step === note.step &&
-                            m.from === participants[pIdx].name &&
-                            m.to === participants[pIdx].name
+                            m.from === participant.name &&
+                            m.to === participant.name
                         );
                         let selfMsgRightOffset = 0;
                         if (selfMessage) {
-                            const textWidth = Math.max(...selfMessage.text.split('\n').map(l => l.length * 8)) + 20;
+                            const textLines = selfMessage.text.split('\n');
+                            const textWidth = Math.max(...textLines.map(l => l.length * 8)) + 20;
                             selfMsgRightOffset = 40 + textWidth;
                         }
 
                         // Also account for activations
                         const activeAlt = diagram.activations.filter(a =>
-                            a.participantName === participants[pIdx].name &&
+                            a.participantName === participant.name &&
                             a.startStep <= note.step &&
                             (a.endStep ?? Infinity) >= note.step
                         );
                         const maxLevel = activeAlt.length > 0 ? Math.max(...activeAlt.map(a => a.level)) : 0;
                         const activationOffset = (this.theme.activationWidth / 2) + (maxLevel * 5);
 
-                        const baseRight = Math.max(halfWidth, activationOffset, selfMsgRightOffset);
+                        const baseRight = Math.max(effectiveBoxOffset, activationOffset, selfMsgRightOffset);
 
                         const currentLeftEdge = stepOccupancy.get(key) ?? (cx + baseRight + 5);
                         x = currentLeftEdge;
