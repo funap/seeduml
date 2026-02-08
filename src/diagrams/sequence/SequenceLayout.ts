@@ -186,6 +186,39 @@ export class LayoutEngine {
             let x1 = fromIdx !== -1 ? participants[fromIdx].centerX : 0;
             let x2 = toIdx !== -1 ? participants[toIdx].centerX : 0;
 
+            // Adjust x1 and x2 based on activations
+            if (fromIdx !== -1 && toIdx !== -1) {
+                // Find active activations for "from" and "to" at this step
+                const fromActivations = activations
+                    .filter(a => a.activation.participantName === m.from && a.activation.startStep <= m.step && (a.activation.endStep ?? Infinity) >= m.step)
+                    .sort((a, b) => b.activation.level - a.activation.level);
+
+                const toActivations = activations
+                    .filter(a => a.activation.participantName === m.to && a.activation.startStep <= m.step && (a.activation.endStep ?? Infinity) >= m.step)
+                    .sort((a, b) => b.activation.level - a.activation.level);
+
+                if (fromIdx !== toIdx) {
+                    // Regular message (not self)
+                    if (fromIdx < toIdx) {
+                        // Left to Right
+                        if (fromActivations.length > 0) {
+                            x1 = fromActivations[0].x + fromActivations[0].width;
+                        }
+                        if (toActivations.length > 0) {
+                            x2 = toActivations[0].x;
+                        }
+                    } else {
+                        // Right to Left
+                        if (fromActivations.length > 0) {
+                            x1 = fromActivations[0].x;
+                        }
+                        if (toActivations.length > 0) {
+                            x2 = toActivations[0].x + toActivations[0].width;
+                        }
+                    }
+                }
+            }
+
             // If this is a create message (target participant created at this step),
             // point to the left edge of the participant box, not center
             if (toIdx !== -1 && participants[toIdx].participant.createdStep === m.step) {
@@ -205,17 +238,62 @@ export class LayoutEngine {
                     )
                     .sort((a, b) => b.activation.level - a.activation.level); // Highest level first
 
-                // Use the rightmost activation edge, or participant center if no activation
-                const baseX = activeActivations.length > 0
-                    ? activeActivations[0].x + activeActivations[0].width
-                    : participants[fromIdx].centerX;
+                // For self-messages, we need to consider if this message IS the trigger for a level change
+                // If m.step is exactly the startStep of the highest activation, then it's a level increase (++)
+                // If it's a level increase, the start of the arrow (points[0]) should be at level N-1,
+                // and the end of the arrow (points[3]) should be at level N.
 
-                const diff = 40;
-                points[0] = { x: baseX, y };
-                points[1] = { x: baseX + diff, y };
-                points.push({ x: baseX + diff, y: y + 25 });
-                points.push({ x: baseX, y: y + 25 });
-                labelPosition = { x: baseX + diff + 5, y: y + 10 };
+                let startLevelIdx: number | undefined = 0;
+                let endLevelIdx: number | undefined = 0;
+
+                if (activeActivations.length > 0) {
+                    const highest = activeActivations[0];
+                    if (highest.activation.startStep === m.step) {
+                        // Level increase (++)
+                        if (activeActivations.length > 1) {
+                            startLevelIdx = 1; // Parent level
+                            endLevelIdx = 0;   // New level
+                        } else {
+                            // First level increase: start from center
+                            startLevelIdx = undefined;
+                            endLevelIdx = 0;
+                        }
+                    } else if (highest.activation.endStep === m.step) {
+                        // Level decrease (--)
+                        if (activeActivations.length > 1) {
+                            startLevelIdx = 0; // Current level
+                            endLevelIdx = 1;   // Parent level
+                        } else {
+                            // Last level decrease: end at center
+                            startLevelIdx = 0;
+                            endLevelIdx = undefined;
+                        }
+                    }
+
+                    const baseXStart = (startLevelIdx !== undefined && activeActivations.length > startLevelIdx)
+                        ? activeActivations[startLevelIdx].x + activeActivations[startLevelIdx].width
+                        : participants[fromIdx].centerX;
+
+                    const baseXEnd = (endLevelIdx !== undefined && activeActivations.length > endLevelIdx)
+                        ? activeActivations[endLevelIdx].x + activeActivations[endLevelIdx].width
+                        : participants[fromIdx].centerX;
+
+                    const diff = 40;
+                    points[0] = { x: baseXStart, y };
+                    points[1] = { x: Math.max(baseXStart, baseXEnd) + diff, y };
+                    points.push({ x: Math.max(baseXStart, baseXEnd) + diff, y: y + 25 });
+                    points.push({ x: baseXEnd, y: y + 25 });
+                    labelPosition = { x: Math.max(baseXStart, baseXEnd) + diff + 5, y: y + 10 };
+                } else {
+                    // No activation, use participant center
+                    const baseX = participants[fromIdx].centerX;
+                    const diff = 40;
+                    points[0] = { x: baseX, y };
+                    points[1] = { x: baseX + diff, y };
+                    points.push({ x: baseX + diff, y: y + 25 });
+                    points.push({ x: baseX, y: y + 25 });
+                    labelPosition = { x: baseX + diff + 5, y: y + 10 };
+                }
             }
 
             return {
@@ -289,7 +367,7 @@ export class LayoutEngine {
             if (a.sourceStep !== undefined) {
                 const triggerMsg = messages.find(m => m.step === a.sourceStep);
                 if (triggerMsg && triggerMsg.from === a.participantName && triggerMsg.to === a.participantName) {
-                    y += 15;
+                    y += 25;
                 }
             }
             const yEnd = stepY[a.endStep!];
