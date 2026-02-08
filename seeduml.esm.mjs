@@ -142,12 +142,12 @@ var SequenceDiagram = class {
       color
     });
   }
-  deactivate(name, step) {
+  deactivate(name, step = this.currentStep, sourceStep) {
     this.addParticipant(name);
-    const activeActivations = this.activations.filter((a) => a.participantName === name && a.endStep === void 0).sort((a, b) => b.level - a.level);
-    if (activeActivations.length > 0) {
-      const firstActive = activeActivations[0];
-      firstActive.endStep = step !== void 0 ? step : this.nextStep();
+    const lastActive = [...this.activations].reverse().find((a) => a.participantName === name && a.endStep === void 0);
+    if (lastActive) {
+      lastActive.endStep = step;
+      lastActive.endSourceStep = sourceStep;
     }
   }
   startGroup(type, label) {
@@ -214,8 +214,24 @@ var SequenceParser = class {
           const normPos = pendingNote.position.toLowerCase();
           let associationStep;
           if (pendingNote.participants.length === 0) {
-            if ((normPos === "right" || normPos === "left") && (lastMessageFrom || lastMessageTo)) {
-              pendingNote.participants = [normPos === "right" ? lastMessageTo : lastMessageFrom];
+            if ((normPos === "right" || normPos === "left") && lastMessageFrom && lastMessageTo) {
+              const idxFrom = diagram.participants.findIndex((p) => p.name === lastMessageFrom);
+              const idxTo = diagram.participants.findIndex((p) => p.name === lastMessageTo);
+              if (idxFrom !== -1 && idxTo !== -1) {
+                const pFrom = diagram.participants[idxFrom];
+                const pTo = diagram.participants[idxTo];
+                let isFromLeftOfTo = idxFrom < idxTo;
+                if (pFrom.order !== void 0 && pTo.order !== void 0) {
+                  isFromLeftOfTo = pFrom.order < pTo.order;
+                }
+                if (normPos === "left") {
+                  pendingNote.participants = [isFromLeftOfTo ? lastMessageFrom : lastMessageTo];
+                } else {
+                  pendingNote.participants = [isFromLeftOfTo ? lastMessageTo : lastMessageFrom];
+                }
+              } else {
+                pendingNote.participants = [lastMessageTo];
+              }
               if (lastMessageStep !== -1) {
                 associationStep = lastMessageStep;
               }
@@ -269,17 +285,9 @@ var SequenceParser = class {
             diagram.activate(name, void 0, void 0, color);
           }
         } else if (act === "deactivate") {
-          if ((name === lastMessageTo || name === lastMessageFrom) && lastMessageStep !== -1) {
-            diagram.deactivate(name, lastMessageStep);
-          } else {
-            diagram.deactivate(name);
-          }
+          diagram.deactivate(name);
         } else if (act === "destroy") {
-          if ((name === lastMessageTo || name === lastMessageFrom) && lastMessageStep !== -1) {
-            diagram.destroy(name, lastMessageStep);
-          } else {
-            diagram.destroy(name, diagram.getCurrentStep());
-          }
+          diagram.destroy(name, diagram.getCurrentStep());
         }
         continue;
       }
@@ -343,9 +351,9 @@ var SequenceParser = class {
             }
             diagram.activate(to, step, step, autoActivColor);
           } else if (shorthand === "--") {
-            diagram.deactivate(from, step);
+            diagram.deactivate(from, step, step);
           } else if (shorthand === "--++") {
-            diagram.deactivate(from, step);
+            diagram.deactivate(from, step, step);
             if (autoActivColor && autoActivColor.startsWith("#")) {
               const hexContent = autoActivColor.substring(1);
               const isHex = /^[0-9A-Fa-f]+$/.test(hexContent) && [3, 4, 6, 8].includes(hexContent.length);
@@ -363,7 +371,7 @@ var SequenceParser = class {
               }
             }
             diagram.activate(from, step, step, autoActivColor);
-            diagram.deactivate(to, step);
+            diagram.deactivate(to, step, step);
           } else if (shorthand === "**") {
             diagram.create(to, step);
           } else if (shorthand === "!!") {
@@ -387,8 +395,24 @@ var SequenceParser = class {
           const normPos = position.toLowerCase();
           let associationStep;
           if (participants.length === 0) {
-            if ((normPos === "right" || normPos === "left") && (lastMessageFrom || lastMessageTo)) {
-              participants = [normPos === "right" ? lastMessageTo : lastMessageFrom];
+            if ((normPos === "right" || normPos === "left") && lastMessageFrom && lastMessageTo) {
+              const idxFrom = diagram.participants.findIndex((p) => p.name === lastMessageFrom);
+              const idxTo = diagram.participants.findIndex((p) => p.name === lastMessageTo);
+              if (idxFrom !== -1 && idxTo !== -1) {
+                const pFrom = diagram.participants[idxFrom];
+                const pTo = diagram.participants[idxTo];
+                let isFromLeftOfTo = idxFrom < idxTo;
+                if (pFrom.order !== void 0 && pTo.order !== void 0) {
+                  isFromLeftOfTo = pFrom.order < pTo.order;
+                }
+                if (normPos === "left") {
+                  participants = [isFromLeftOfTo ? lastMessageFrom : lastMessageTo];
+                } else {
+                  participants = [isFromLeftOfTo ? lastMessageTo : lastMessageFrom];
+                }
+              } else {
+                participants = [lastMessageTo];
+              }
               if (lastMessageStep !== -1) {
                 associationStep = lastMessageStep;
               }
@@ -612,6 +636,27 @@ var LayoutEngine = class {
       const y = stepY[m.step];
       let x1 = fromIdx !== -1 ? participants[fromIdx].centerX : 0;
       let x2 = toIdx !== -1 ? participants[toIdx].centerX : 0;
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const fromActivations = activations.filter((a) => a.activation.participantName === m.from && a.activation.startStep <= m.step && (a.activation.endStep ?? Infinity) >= m.step).sort((a, b) => b.activation.level - a.activation.level);
+        const toActivations = activations.filter((a) => a.activation.participantName === m.to && a.activation.startStep <= m.step && (a.activation.endStep ?? Infinity) >= m.step).sort((a, b) => b.activation.level - a.activation.level);
+        if (fromIdx !== toIdx) {
+          if (fromIdx < toIdx) {
+            if (fromActivations.length > 0) {
+              x1 = fromActivations[0].x + fromActivations[0].width;
+            }
+            if (toActivations.length > 0) {
+              x2 = toActivations[0].x;
+            }
+          } else {
+            if (fromActivations.length > 0) {
+              x1 = fromActivations[0].x;
+            }
+            if (toActivations.length > 0) {
+              x2 = toActivations[0].x + toActivations[0].width;
+            }
+          }
+        }
+      }
       if (toIdx !== -1 && participants[toIdx].participant.createdStep === m.step) {
         x2 = participants[toIdx].x;
       }
@@ -621,13 +666,44 @@ var LayoutEngine = class {
         const activeActivations = activations.filter(
           (a) => a.activation.participantName === m.from && a.activation.startStep <= m.step && (a.activation.endStep ?? Infinity) >= m.step
         ).sort((a, b) => b.activation.level - a.activation.level);
-        const baseX = activeActivations.length > 0 ? activeActivations[0].x + activeActivations[0].width : participants[fromIdx].centerX;
-        const diff = 40;
-        points[0] = { x: baseX, y };
-        points[1] = { x: baseX + diff, y };
-        points.push({ x: baseX + diff, y: y + 25 });
-        points.push({ x: baseX, y: y + 25 });
-        labelPosition = { x: baseX + diff + 5, y: y + 10 };
+        let startLevelIdx = 0;
+        let endLevelIdx = 0;
+        if (activeActivations.length > 0) {
+          const highest = activeActivations[0];
+          if (highest.activation.startStep === m.step) {
+            if (activeActivations.length > 1) {
+              startLevelIdx = 1;
+              endLevelIdx = 0;
+            } else {
+              startLevelIdx = void 0;
+              endLevelIdx = 0;
+            }
+          } else if (highest.activation.endStep === m.step) {
+            if (activeActivations.length > 1) {
+              startLevelIdx = 0;
+              endLevelIdx = 1;
+            } else {
+              startLevelIdx = 0;
+              endLevelIdx = void 0;
+            }
+          }
+          const baseXStart = startLevelIdx !== void 0 && activeActivations.length > startLevelIdx ? activeActivations[startLevelIdx].x + activeActivations[startLevelIdx].width : participants[fromIdx].centerX;
+          const baseXEnd = endLevelIdx !== void 0 && activeActivations.length > endLevelIdx ? activeActivations[endLevelIdx].x + activeActivations[endLevelIdx].width : participants[fromIdx].centerX;
+          const diff = 40;
+          points[0] = { x: baseXStart, y };
+          points[1] = { x: Math.max(baseXStart, baseXEnd) + diff, y };
+          points.push({ x: Math.max(baseXStart, baseXEnd) + diff, y: y + 25 });
+          points.push({ x: baseXEnd, y: y + 25 });
+          labelPosition = { x: Math.max(baseXStart, baseXEnd) + diff + 5, y: y + 10 };
+        } else {
+          const baseX = participants[fromIdx].centerX;
+          const diff = 40;
+          points[0] = { x: baseX, y };
+          points[1] = { x: baseX + diff, y };
+          points.push({ x: baseX + diff, y: y + 25 });
+          points.push({ x: baseX, y: y + 25 });
+          labelPosition = { x: baseX + diff + 5, y: y + 10 };
+        }
       }
       return {
         message: m,
@@ -695,17 +771,24 @@ var LayoutEngine = class {
       if (a.sourceStep !== void 0) {
         const triggerMsg = messages.find((m) => m.step === a.sourceStep);
         if (triggerMsg && triggerMsg.from === a.participantName && triggerMsg.to === a.participantName) {
-          y += 15;
+          y += 25;
         }
       }
-      const yEnd = stepY[a.endStep];
+      let yEnd = stepY[a.endStep];
+      if (a.endSourceStep !== void 0) {
+        const closeMsg = messages.find((m) => m.step === a.endSourceStep);
+        if (closeMsg && closeMsg.from === a.participantName && closeMsg.to === a.participantName) {
+          yEnd += 25;
+        }
+      }
       const minHeight = 5;
+      const height = Math.max(minHeight, yEnd - y);
       return {
         activation: a,
         x,
         y,
         width: this.theme.activationWidth,
-        height: Math.max(minHeight, yEnd - y)
+        height
       };
     }).filter((a) => a !== null);
   }
@@ -743,8 +826,8 @@ var LayoutEngine = class {
     diagram.notes.forEach((n) => {
       const lines = n.text.split("\n");
       const noteHeight = lines.length * 20 + 10;
-      topExtension[n.step] = Math.max(topExtension[n.step], noteHeight / 2 - 10);
-      bottomExtension[n.step] = Math.max(bottomExtension[n.step], noteHeight / 2 + 10);
+      topExtension[n.step] = Math.max(topExtension[n.step], noteHeight / 2);
+      bottomExtension[n.step] = Math.max(bottomExtension[n.step], noteHeight / 2);
     });
     diagram.messages.forEach((m) => {
       const lines = m.text.split("\n");
@@ -906,7 +989,7 @@ var LayoutEngine = class {
       const minWidth = 60;
       const noteWidth = Math.max(calculatedWidth, minWidth);
       const noteHeight = lines.length * 20 + 10;
-      const y = stepY[note.step] - noteHeight / 2 + 10;
+      const y = stepY[note.step] - noteHeight / 2;
       let x = 0;
       if (note.position === "across") {
         x = 0;
@@ -927,26 +1010,30 @@ var LayoutEngine = class {
           const pIdx = note.position === "left" ? Math.min(...pIdxs) : Math.max(...pIdxs);
           const cx = relpCenterX[pIdx];
           const key = `${note.step}-${pIdx}-${note.position}`;
+          const participant = participants[pIdx];
           const halfWidth = pWidths[pIdx] / 2;
+          const isCreatedStep = note.step === participant.createdStep;
+          const effectiveBoxOffset = isCreatedStep ? halfWidth : 0;
           if (note.position === "left") {
-            const currentRightEdge = stepOccupancy.get(key) ?? cx - halfWidth - 5;
+            const currentRightEdge = stepOccupancy.get(key) ?? cx - effectiveBoxOffset - 5;
             x = currentRightEdge - noteWidth;
             stepOccupancy.set(key, x - 10);
           } else {
             const selfMessage = diagram.messages.find(
-              (m) => m.step === note.step && m.from === participants[pIdx].name && m.to === participants[pIdx].name
+              (m) => m.step === note.step && m.from === participant.name && m.to === participant.name
             );
             let selfMsgRightOffset = 0;
             if (selfMessage) {
-              const textWidth = Math.max(...selfMessage.text.split("\n").map((l) => l.length * 8)) + 20;
+              const textLines = selfMessage.text.split("\n");
+              const textWidth = Math.max(...textLines.map((l) => l.length * 8)) + 20;
               selfMsgRightOffset = 40 + textWidth;
             }
             const activeAlt = diagram.activations.filter(
-              (a) => a.participantName === participants[pIdx].name && a.startStep <= note.step && (a.endStep ?? Infinity) >= note.step
+              (a) => a.participantName === participant.name && a.startStep <= note.step && (a.endStep ?? Infinity) >= note.step
             );
             const maxLevel = activeAlt.length > 0 ? Math.max(...activeAlt.map((a) => a.level)) : 0;
             const activationOffset = this.theme.activationWidth / 2 + maxLevel * 5;
-            const baseRight = Math.max(halfWidth, activationOffset, selfMsgRightOffset);
+            const baseRight = Math.max(effectiveBoxOffset, activationOffset, selfMsgRightOffset);
             const currentLeftEdge = stepOccupancy.get(key) ?? cx + baseRight + 5;
             x = currentLeftEdge;
             stepOccupancy.set(key, x + noteWidth + 10);
