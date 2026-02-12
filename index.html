@@ -102,11 +102,15 @@
             font-size: 48px;
             font-weight: 800;
             margin-bottom: 24px;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+
+        .gradient-text {
             background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            letter-spacing: -0.02em;
         }
 
         .hero p {
@@ -440,6 +444,97 @@
             color: var(--text-main);
             background: #f1f5f9;
         }
+
+        .badge-beta {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #eff6ff;
+            /* Very light blue */
+            color: var(--primary);
+            /* Site primary blue */
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            text-transform: uppercase;
+            vertical-align: middle;
+            margin-left: 8px;
+            letter-spacing: 0.5px;
+            border: 1px solid #dbeafe;
+            /* Light blue border */
+            line-height: 1;
+        }
+
+        /* Tabs */
+        .tabs-nav {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--primary);
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .docs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .docs-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .usage-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .usage-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 
@@ -448,7 +543,7 @@
         <div class="container">
             <nav>
                 <a href="#" class="logo">
-                    🌱 <span>SeedUML</span>
+                    🚀 <span>SeedUML</span><span class="badge-beta">Beta</span>
                 </a>
                 <div class="nav-links">
                     <a href="#features">Features</a>
@@ -464,9 +559,11 @@
     <main>
         <div class="container">
             <section class="hero">
-                <h1>Sequence Diagrams,<br>Instantly in Your Browser</h1>
-                <p>Create beautiful, precise sequence diagrams using a simple text syntax. No servers, no latency, just
-                    pure client-side rendering.</p>
+                <h1><span class="gradient-text">UML Diagrams</span>,<br>
+                    <span class="gradient-text">Instantly in Your Browser</span>
+                </h1>
+                <p>Create beautiful, precise sequence and component diagrams using a simple text syntax. No servers, no
+                    latency, just pure client-side rendering.</p>
                 <div style="display: flex; gap: 16px; justify-content: center;">
                     <a href="#playground" class="btn">Try it Live</a>
                     <a href="#gallery" class="btn secondary">View Examples</a>
@@ -486,9 +583,10 @@
                         <p>Generates crisp, publication-quality SVGs with precise alignment and beautiful styling.</p>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">🛠</span>
-                        <h3>Compatible Syntax</h3>
-                        <p>Uses a familiar syntax similar to PlantUML, making it easy to learn and migrate.</p>
+                        <span class="feature-icon">📄</span>
+                        <h3>Markdown Friendly</h3>
+                        <p>Pairs perfectly with Markdown. Write diagrams as code for documentation that's versioned,
+                            searchable, and easy to maintain.</p>
                     </div>
                 </div>
             </section>
@@ -533,21 +631,34 @@ end</textarea>
             </section>
 
             <section id="gallery">
-                <h2 style="margin-bottom: 20px; text-align: center;">Examples Gallery</h2>
+                <h2 style="margin-bottom: 40px; text-align: center;">Examples Gallery</h2>
 
-                <h3 style="margin: 40px 0 20px; color: var(--secondary);">Compatible with PlantUML</h3>
-                <div class="gallery-grid" id="gallery-compatible">
-                    <!-- Compatible items injected via JS -->
+                <div class="tabs-nav">
+                    <button class="tab-btn active" onclick="switchTab('sequence')">Sequence Diagrams</button>
+                    <button class="tab-btn" onclick="switchTab('component')">Component Diagrams</button>
                 </div>
 
-                <h3 style="margin: 40px 0 20px; color: var(--secondary);">SeedUML Extensions (Incompatible)</h3>
-                <div class="gallery-grid" id="gallery-extensions">
-                    <!-- Extension items injected via JS -->
+                <div id="sequence-tab" class="tab-content active">
+                    <h3 style="margin: 0 0 20px; color: var(--secondary);">Compatible with PlantUML</h3>
+                    <div class="gallery-grid" id="gallery-compatible">
+                        <!-- Compatible items injected via JS -->
+                    </div>
+
+                    <h3 style="margin: 40px 0 20px; color: var(--secondary);">SeedUML Extensions (Incompatible)</h3>
+                    <div class="gallery-grid" id="gallery-extensions">
+                        <!-- Extension items injected via JS -->
+                    </div>
+                </div>
+
+                <div id="component-tab" class="tab-content">
+                    <div class="gallery-grid" id="gallery-component">
+                        <!-- Component items injected via JS -->
+                    </div>
                 </div>
             </section>
 
             <section id="documentation">
-                <h2 style="margin-bottom: 40px; text-align: center;">📚 Getting Started</h2>
+                <h2 style="margin-bottom: 40px; text-align: center;">📘 Getting Started</h2>
 
                 <div class="feature-card" style="margin-bottom: 40px;">
                     <h3 style="margin-bottom: 15px;">Getting Started</h3>
@@ -563,18 +674,19 @@ end</textarea>
                     </p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px;">
+                <div class="docs-grid">
                     <div class="feature-card">
-                        <h3 style="margin-bottom: 15px;">✅ Manual Rendering</h3>
+                        <h3 style="margin-bottom: 15px;">🚀 Manual Rendering</h3>
                         <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px; line-height: 1.6;">
                             Use <code
-                                style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">renderSequenceDiagram()</code>
-                            to manually convert diagram code to SVG. Perfect for dynamic content or custom rendering
-                            logic.
+                                style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">render()</code>
+                            to manually convert diagram code to SVG. This function automatically detects the diagram
+                            type
+                            (Sequence or Component).
                         </p>
                         <pre
-                            style="background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 11px; line-height: 1.5; border: 1px solid var(--border); margin-bottom: 12px;"><code style="color: var(--text-main);">const code = 'Alice -> Bob: Hello';
-const svg = seeduml.renderSequenceDiagram(code);
+                            style="background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 11px; line-height: 1.5; border: 1px solid var(--border); margin-bottom: 12px;"><code style="color: var(--text-main);">const code = 'Alice -> Bob: Hello'; // or component diagram code
+const svg = seeduml.render(code);
 
 // Insert into DOM
 document.getElementById('output').innerHTML = svg;</code></pre>
@@ -628,8 +740,8 @@ seeduml.initialize();</code></pre>
                 </div>
 
                 <div class="feature-card" style="margin-bottom: 40px;">
-                    <h3 style="margin-bottom: 15px;">📝 HTML Usage Example</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <h3 style="margin-bottom: 15px;">📄 HTML Usage Example</h3>
+                    <div class="usage-grid">
                         <div style="display: flex; flex-direction: column;">
                             <p
                                 style="color: var(--text-muted); font-size: 12px; font-weight: 600; margin-bottom: 10px;">
@@ -694,8 +806,14 @@ S -> C: Response</pre>
     </main>
 
     <footer>
-        <div class="container">
+        <div class="container" style="text-align: center;">
             <p>SeedUML &copy; 2026. Open source and free to use.</p>
+            <p
+                style="font-size: 12px; color: var(--text-muted); margin-top: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+                Note: SeedUML is currently in beta. Vertical alignment and layout algorithms are subject to refinement
+                as
+                the library evolves.
+            </p>
         </div>
     </footer>
 
@@ -1142,6 +1260,20 @@ deactivate App`
         const modalBody = document.getElementById('modal-body');
         const closeModal = document.getElementById('close-modal');
         const modalCopyBtn = document.getElementById('modal-copy-btn');
+        const galleryComponent = document.getElementById('gallery-component');
+
+        function switchTab(type) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (type === 'sequence') {
+                document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+                document.getElementById('sequence-tab').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.getElementById('component-tab').classList.add('active');
+            }
+        }
 
         // Force preview to fit
         output.classList.add('zoom-fit');
@@ -1178,8 +1310,8 @@ deactivate App`
 
         function render() {
             try {
-                if (window.seeduml && window.seeduml.renderSequenceDiagram) {
-                    const svg = window.seeduml.renderSequenceDiagram(editor.value);
+                if (window.seeduml && window.seeduml.render) {
+                    const svg = window.seeduml.render(editor.value);
                     output.innerHTML = svg;
                 }
             } catch (e) {
@@ -1207,40 +1339,119 @@ deactivate App`
             });
         }
 
+        const componentSamples = {
+            comp_basic: {
+                title: "Components",
+                code: `[First component]\n[Another component] as Comp2\ncomponent Comp3\ncomponent [Last\\ncomponent] as Comp4`
+            },
+            comp_naming: {
+                title: "Naming Exceptions ($)",
+                code: `component [$C1]\ncomponent [$C2] $C2\ncomponent [$C2] as dollarC2\nremove $C1\nremove $C2\nremove dollarC2`
+            },
+            comp_interfaces: {
+                title: "Interfaces",
+                code: `() "First Interface"\n() "Another interface" as Interf2\ninterface Interf3\ninterface "Last\\ninterface" as Interf4\n\n[component]`
+            },
+            comp_basic_rel: {
+                title: "Basic Example",
+                code: `DataAccess - [First Component]\n[First Component] ..> HTTP : use`
+            },
+            comp_notes: {
+                title: "Using Notes",
+                code: `[Component] as C\nnote top of C: A top note\nnote bottom of C\n  A bottom note can also\n  be on several lines\nend note\nnote left of C\n  A left note can also\n  be on several lines\nend note\nnote right of C: A right note`
+            },
+            comp_floating_notes: {
+                title: "Floating Notes",
+                code: `[Component] as C\nnote as N\n  A floating note can also\n  be on several lines\nend note\nC .. N`
+            },
+            comp_grouping: {
+                title: "Grouping Components",
+                code: `package "Some Group" {\n  HTTP - [First Component]\n  [Another Component]\n}\nnode "Other Groups" {\n  FTP - [Second Component]\n  [First Component] --> FTP\n}\ncloud {\n  [Example 1]\n}\ndatabase "MySql" {\n  folder "This is my folder" {\n    [Folder 3]\n  }\n  frame "Foo" {\n    [Frame 4]\n  }\n}\n[Another Component] --> [Example 1]\n[Example 1] --> [Folder 3]\n[Folder 3] --> [Frame 4]`
+            },
+            comp_directions: {
+                title: "Directions",
+                code: `[Component] -left-> left\n[Component] -right-> right\n[Component] -up-> up\n[Component] -down-> down`
+            },
+            comp_uml2: {
+                title: "UML2 Notation",
+                code: `interface "Data Access" as DA\nDA - [First Component]\n[First Component] ..> HTTP : use`
+            },
+            comp_rect: {
+                title: "Rectangle Notation",
+                code: `skinparam componentStyle rectangle\ninterface "Data Access" as DA\nDA - [First Component]\n[First Component] ..> HTTP : use`
+            },
+            comp_long_desc: {
+                title: "Long Description",
+                code: `component comp1 [\nThis component has a long comment\non several lines\n]`
+            },
+            comp_colors: {
+                title: "Individual Colors",
+                code: `component [Web Server] #Yellow`
+            },
+            comp_tagged: {
+                title: "Tagged Components",
+                code: `component C1 $tag13\ncomponent C2\ncomponent C3 $tag13\nC1 -- C2\nremove $tag13`
+            },
+            comp_json: {
+                title: "JSON Data",
+                code: `allowmixing\ncomponent Component\n() Interface\njson JSON {\n   "fruit":"Apple",\n   "size":"Large",\n   "color": ["Red", "Green"]\n}`
+            },
+            comp_ports: {
+                title: "Ports",
+                code: `[c]\ncomponent C {\n  portin p1\n  portin p2\n  portin p3\n  component c1\n}\nc --> p1\nc --> p2\nc --> p3\np1 --> c1\np2 --> c1`
+            }
+        };
+
         setupCopyButton(copyBtn, output);
         setupCopyButton(modalCopyBtn, modalBody);
 
         // Initialize Gallery
         function initGallery() {
+            // Sequence Samples
             Object.entries(samples).forEach(([key, sample]) => {
-                const item = document.createElement('div');
-                item.className = 'gallery-item';
-
-                // Render preview
-                let previewSvg = '';
-                try {
-                    previewSvg = window.seeduml.renderSequenceDiagram(sample.code);
-                } catch (e) { previewSvg = 'Error'; }
-
-                item.innerHTML = `
-                    <div class="gallery-preview">${previewSvg}</div>
-                    <div class="gallery-info">
-                        <div class="gallery-title">${sample.title}</div>
-                    </div>
-                `;
-
-                item.addEventListener('click', () => {
-                    editor.value = sample.code;
-                    render();
-                    document.getElementById('playground').scrollIntoView({ behavior: 'smooth' });
-                });
-
+                const item = createGalleryItem(sample, 'sequence');
                 if (key === 'bubbleNote') {
                     galleryExtensions.appendChild(item);
                 } else {
                     galleryCompatible.appendChild(item);
                 }
             });
+
+            // Component Samples
+            Object.entries(componentSamples).forEach(([key, sample]) => {
+                const item = createGalleryItem(sample, 'component');
+                galleryComponent.appendChild(item);
+            });
+        }
+
+        function createGalleryItem(sample, type) {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+
+            // Render preview
+            let previewSvg = '';
+            try {
+                if (type === 'sequence') {
+                    previewSvg = window.seeduml.renderSequenceDiagram(sample.code);
+                } else {
+                    previewSvg = window.seeduml.renderComponentDiagram(sample.code);
+                }
+            } catch (e) { previewSvg = 'Error'; }
+
+            item.innerHTML = `
+                <div class="gallery-preview">${previewSvg}</div>
+                <div class="gallery-info">
+                    <div class="gallery-title">${sample.title}</div>
+                </div>
+            `;
+
+            item.addEventListener('click', () => {
+                editor.value = sample.code;
+                render();
+                document.getElementById('playground').scrollIntoView({ behavior: 'smooth' });
+            });
+
+            return item;
         }
 
         // Initial Load
