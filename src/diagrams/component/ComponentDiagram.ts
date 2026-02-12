@@ -57,19 +57,12 @@ export class ComponentDiagram implements Diagram {
         return component;
     }
 
-    addRelationship(from: string, to: string, type: RelationshipType = 'solid', label?: string, direction?: Direction, showArrowHead: boolean = true, parentId?: string) {
-        if (!this.components.some(c => c.name === from)) {
-            this.addComponent(from, 'component', from, parentId);
-        }
-        if (!this.components.some(c => c.name === to)) {
-            this.addComponent(to, 'component', to, parentId);
-        }
+    addRelationship(from: string, to: string, type: RelationshipType = 'solid', label?: string, direction?: Direction, showArrowHead: boolean = true, _parentId?: string) {
         this.relationships.push({ from, to, type, label, direction, showArrowHead });
     }
 
     addNote(text: string, position?: 'left' | 'right' | 'top' | 'bottom', linkedTo?: string, alias?: string) {
         const id = `note_${this.notes.length}`;
-        if (linkedTo) this.addComponent(linkedTo, 'component');
         this.notes.push({ text, position, linkedTo, id, alias });
     }
 
