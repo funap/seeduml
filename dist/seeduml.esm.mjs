@@ -17,7 +17,9 @@ var SequenceDiagram = class {
     this.currentStep = 0;
     this.groupStack = [];
     this.autonumberConfig = null;
-    this.currentAutonumber = 0;
+    this.currentAutonumbers = [0];
+    this.autonumberDelimiter = ".";
+    this.autonumberStopped = false;
     this.autoactivateEnabled = false;
   }
   setHideFootbox(hide) {
@@ -44,9 +46,16 @@ var SequenceDiagram = class {
     this.addParticipant(from);
     this.addParticipant(to);
     let msgNumber;
-    if (this.autonumberConfig) {
-      msgNumber = this.currentAutonumber.toString();
-      this.currentAutonumber += this.autonumberConfig.increment;
+    if (this.autonumberConfig && !this.autonumberStopped) {
+      this.currentAutonumbers[this.currentAutonumbers.length - 1] += this.autonumberConfig.increment;
+      const rawNumber = this.currentAutonumbers.join(this.autonumberDelimiter);
+      if (this.autonumberConfig.format) {
+        msgNumber = this.autonumberConfig.format.replace(/%d/g, rawNumber);
+      } else {
+        msgNumber = rawNumber;
+      }
+      text = text.replace(/%autonumber%/g, rawNumber);
+      text = text.replace(/<U\+([0-9a-fA-F]{4})>/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
     }
     this.messages.push({ from, to, text, type, step, arrowHead, startHead, color, bidirectional, number: msgNumber });
     if (this.autoactivateEnabled && from !== to && type === "arrow") {
@@ -55,8 +64,43 @@ var SequenceDiagram = class {
     return step;
   }
   setAutonumber(start = 1, increment = 1, format) {
-    this.autonumberConfig = { start, increment, format };
-    this.currentAutonumber = start;
+    this.autonumberConfig = { start: typeof start === "number" ? start : 1, increment, format };
+    this.autonumberStopped = false;
+    if (typeof start === "string") {
+      const parts = start.split(/([.,;:])/);
+      if (parts.length > 1) {
+        this.autonumberDelimiter = parts[1];
+        this.currentAutonumbers = parts.filter((_, i) => i % 2 === 0).map((p) => parseInt(p, 10));
+      } else {
+        this.currentAutonumbers = [parseInt(start, 10)];
+      }
+    } else {
+      this.currentAutonumbers = [start];
+    }
+    this.currentAutonumbers[this.currentAutonumbers.length - 1] -= increment;
+  }
+  incrementAutonumberLevel(level) {
+    if (!this.autonumberConfig) return;
+    const index = level.toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
+    if (index >= 0 && index < this.currentAutonumbers.length) {
+      this.currentAutonumbers[index]++;
+      for (let i = index + 1; i < this.currentAutonumbers.length; i++) {
+        this.currentAutonumbers[i] = 1;
+      }
+      this.currentAutonumbers[this.currentAutonumbers.length - 1] -= this.autonumberConfig.increment;
+    }
+  }
+  stopAutonumber() {
+    this.autonumberStopped = true;
+  }
+  resumeAutonumber(increment, format) {
+    if (this.autonumberConfig) {
+      this.autonumberStopped = false;
+      if (increment !== void 0) this.autonumberConfig.increment = increment;
+      if (format !== void 0) this.autonumberConfig.format = format;
+    } else {
+      this.setAutonumber(1, increment || 1, format);
+    }
   }
   setAutoactivate(enabled) {
     this.autoactivateEnabled = enabled;
@@ -120,6 +164,11 @@ var SequenceDiagram = class {
   addNote(text, position, participants, color, shape = "folder", step) {
     const noteStep = step !== void 0 ? step : this.currentStep++;
     const owner = this.groupStack.length > 0 ? this.groupStack[this.groupStack.length - 1] : void 0;
+    if (this.autonumberConfig) {
+      const rawNumber = this.currentAutonumbers.join(this.autonumberDelimiter);
+      text = text.replace(/%autonumber%/g, rawNumber);
+      text = text.replace(/<U\+([0-9a-fA-F]{4})>/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    }
     this.notes.push({
       text,
       position,
@@ -502,14 +551,29 @@ var SequenceParser = class {
         diagram.returnMessage(normalizedText);
         continue;
       }
-      const autonumberMatch = line.match(/^autonumber(?:\s+(\d+))?(?:\s+(\d+))?(?:\s+"(.*?)"|)$/i);
-      if (autonumberMatch) {
-        let [, start, increment, format] = autonumberMatch;
-        diagram.setAutonumber(
-          start ? parseInt(start, 10) : 1,
-          increment ? parseInt(increment, 10) : 1,
+      if (/^autonumber\s+stop$/i.test(line)) {
+        diagram.stopAutonumber();
+        continue;
+      }
+      const autonumberResumeMatch = line.match(/^autonumber\s+resume(?:\s+(\d+))?(?:\s+"(.*?)"|)$/i);
+      if (autonumberResumeMatch) {
+        let [, increment, format] = autonumberResumeMatch;
+        diagram.resumeAutonumber(
+          increment ? parseInt(increment, 10) : void 0,
           format
         );
+        continue;
+      }
+      const autonumberIncMatch = line.match(/^autonumber\s+inc\s+([A-Z])$/i);
+      if (autonumberIncMatch) {
+        diagram.incrementAutonumberLevel(autonumberIncMatch[1]);
+        continue;
+      }
+      const autonumberMatch = line.match(/^autonumber(?:\s+([\d.]+))?(?:\s+(\d+))?(?:\s+"(.*?)"|)$/i);
+      if (autonumberMatch) {
+        let [, startStr, incrementStr, format] = autonumberMatch;
+        const increment = incrementStr ? parseInt(incrementStr, 10) : 1;
+        diagram.setAutonumber(startStr || 1, increment, format);
         continue;
       }
       const autoactivateMatch = line.match(/^autoactivate\s+(on|off)$/i);
@@ -1493,8 +1557,9 @@ var SequenceSVGRenderer = class {
         const [p1, p2] = ml.points;
         svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${strokeColor}" stroke-width="1.5" stroke-dasharray="${strokeDash}" marker-end="${markerEnd}" marker-start="${markerStart}" />`;
       }
-      const text = m.number ? `[${m.number}] ${m.text}` : m.text;
-      const lines = text.split("\n");
+      const numberPrefix = m.number ? this.formatRichText(m.number) : "";
+      const messageText = m.text || "";
+      const lines = messageText.split("\n");
       const anchor = ml.points.length > 2 ? "start" : "middle";
       lines.forEach((line, i) => {
         const lineY = ml.labelPosition.y - (lines.length - 1 - i) * 15 - 5;
@@ -1502,7 +1567,9 @@ var SequenceSVGRenderer = class {
         if (ml.points.length > 2) {
           y = ml.labelPosition.y + i * 20;
         }
-        svg += `<text x="${ml.labelPosition.x}" y="${y}" text-anchor="${anchor}" font-size="${this.theme.fontSize - 2}" fill="${strokeColor}">${line}</text>`;
+        const formattedLine = this.formatRichText(line);
+        const displayContent = i === 0 && numberPrefix ? `${numberPrefix} ${formattedLine}` : formattedLine;
+        svg += `<text x="${ml.labelPosition.x}" y="${y}" text-anchor="${anchor}" font-size="${this.theme.fontSize - 2}" fill="${strokeColor}">${displayContent}</text>`;
       });
     });
     return svg;
@@ -1578,6 +1645,13 @@ var SequenceSVGRenderer = class {
   }
   formatRichText(text) {
     let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+    escaped = escaped.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<tspan font-weight="bold">$1</tspan>');
+    escaped = escaped.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<tspan text-decoration="underline">$1</tspan>');
+    escaped = escaped.replace(/&lt;i&gt;(.*?)&lt;\/i&gt;/gi, '<tspan font-style="italic">$1</tspan>');
+    escaped = escaped.replace(/&lt;s&gt;(.*?)&lt;\/s&gt;/gi, '<tspan text-decoration="line-through">$1</tspan>');
+    escaped = escaped.replace(/&lt;font\s+color=(?:&quot;)?(.*?)(?:&quot;)?&gt;(.*?)&lt;\/font&gt;/gi, '<tspan fill="$1">$2</tspan>');
+    escaped = escaped.replace(/&lt;b&gt;(?!.*&lt;\/b&gt;)(.*)/gi, '<tspan font-weight="bold">$1</tspan>');
+    escaped = escaped.replace(/&lt;font\s+color=(?:&quot;)?(.*?)(?:&quot;)?&gt;(?!.*&lt;\/font&gt;)(.*)/gi, '<tspan fill="$1">$2</tspan>');
     escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<tspan font-weight="bold">$1</tspan>');
     escaped = escaped.replace(/\/\/(.*?)\/\//g, '<tspan font-style="italic">$1</tspan>');
     escaped = escaped.replace(/""(.*?)""/g, '<tspan font-family="monospace">$1</tspan>');
@@ -3048,11 +3122,17 @@ function renderError(e) {
     `.trim();
 }
 function render(content) {
-  const isComponent = /\b(component|interface|package|node|cloud|database|frame|folder)\b|\[.*?\]/.test(content);
-  const isSequence = /\b(participant|actor|boundary|control|entity|collections|queue|sequence)\b/.test(content);
+  const hasSequenceKeywords = /\b(participant|actor|boundary|control|entity|collections|queue)\b/.test(content);
+  const hasComponentKeywords = /\b(component|package|node|cloud|database|frame|folder)\b/.test(content);
+  const hasComponentBrackets = /^\s*\[[^\]]+\]/m.test(content);
+  const isComponent = hasComponentKeywords || hasComponentBrackets;
+  const isSequence = hasSequenceKeywords;
+  if (isSequence && !isComponent) return renderSequenceDiagram(content);
   if (isComponent && !isSequence) return renderComponentDiagram(content);
-  if (!isComponent && isSequence) return renderSequenceDiagram(content);
-  if (/\[.*?\]/.test(content)) return renderComponentDiagram(content);
+  if (/\b(alt|else|loop|group|note|opt|par|break|critical|ref)\b/.test(content)) {
+    return renderSequenceDiagram(content);
+  }
+  if (hasComponentBrackets) return renderComponentDiagram(content);
   return renderSequenceDiagram(content);
 }
 function renderAll(selector = "pre.seeduml") {
