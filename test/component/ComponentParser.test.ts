@@ -246,6 +246,17 @@ describe('ComponentParser: PlantUML Standard Syntax', () => {
       expect(diagram.findComponent('Implicit1')).toBeDefined();
       expect(diagram.findComponent('Implicit2')).toBeDefined();
     });
+
+    it('should parse reverse arrows: <- and <--', () => {
+      const parser = new ComponentParser();
+      const diagram = parser.parse('Interface1 <-- [Component]');
+      // Under the hood, this creates a relationship from Component to Interface1
+      const rel = diagram.relationships[0];
+      expect(rel.from).toBe('Component');
+      expect(rel.to).toBe('Interface1');
+      expect(rel.direction).toBe('up'); // inverted from down
+      expect(rel.showArrowHead).toBe(true);
+    });
   });
 
   describe('Notes', () => {

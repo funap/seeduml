@@ -45,7 +45,7 @@ function renderError(e: any): string {
 
 export function render(content: string): string {
     // Basic auto-detection logic
-    const isComponent = /\b(component|interface|package|node|cloud|database|frame|folder|\[.*?\])\b/.test(content);
+    const isComponent = /\b(component|interface|package|node|cloud|database|frame|folder)\b|\[.*?\]/.test(content);
     const isSequence = /\b(participant|actor|boundary|control|entity|collections|queue|sequence)\b/.test(content);
 
     // Default to sequence if ambiguous but has -> or -- (could be component too)
@@ -53,8 +53,8 @@ export function render(content: string): string {
     if (isComponent && !isSequence) return renderComponentDiagram(content);
     if (!isComponent && isSequence) return renderSequenceDiagram(content);
 
-    // Fallback: Check for component specific syntax like [Bracket]
-    if (/^\[.*?\]/m.test(content)) return renderComponentDiagram(content);
+    // Fallback: Check for component specific syntax like [Bracket] or component elements
+    if (/\[.*?\]/.test(content)) return renderComponentDiagram(content);
 
     // Default
     return renderSequenceDiagram(content);

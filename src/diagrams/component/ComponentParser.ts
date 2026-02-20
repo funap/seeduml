@@ -213,19 +213,35 @@ export class ComponentParser implements Parser {
 
             // 3. Relationships
             const componentRef = `(?:\\[([^\\]]+)\\]|(".*?"|[^\\s-]+))`;
-            const arrowRef = `([-.]+[^[\\]\\s]*)`;
-            const separator = `(?:\\s+|(?<=[^\\s])(?=[-.])|(?<=[-.])(?=[^\\s]))`;
+            const arrowRef = `([<>]*[-.]+[<>]*[^[\\]\\s]*)`;
+            const separator = `(?:\\s+|(?<=[^\\s])(?=[<\\-.>])|(?<=[<\\-.>])(?=[^\\s]))`;
 
             const relRegex = new RegExp(`^${componentRef}${separator}${arrowRef}${separator}${componentRef}(?:\\s*:\\s*(.*))?$`);
             const relMatch = line.match(relRegex);
 
             if (relMatch) {
-                const id1Raw = relMatch[1] || relMatch[2];
-                const isId1Bracketed = !!relMatch[1];
+                const id1RawVal = relMatch[1] || relMatch[2];
+                const isId1BracketedVal = !!relMatch[1];
                 const arrow = relMatch[3];
-                const id2Raw = relMatch[4] || relMatch[5];
-                const isId2Bracketed = !!relMatch[4];
+                const id2RawVal = relMatch[4] || relMatch[5];
+                const isId2BracketedVal = !!relMatch[4];
                 const label = relMatch[6];
+
+                let id1Raw = id1RawVal;
+                let id2Raw = id2RawVal;
+                let isId1Bracketed = isId1BracketedVal;
+                let isId2Bracketed = isId2BracketedVal;
+
+                const hasReverse = arrow.includes('<');
+                const hasForward = arrow.includes('>');
+
+                // For reverse arrows (e.g. <-, <--), swap from and to
+                if (hasReverse && !hasForward) {
+                    id1Raw = id2RawVal;
+                    id2Raw = id1RawVal;
+                    isId1Bracketed = isId2BracketedVal;
+                    isId2Bracketed = isId1BracketedVal;
+                }
 
                 const id1 = id1Raw.replace(/^"(.*)"$/, '$1');
                 const id2 = id2Raw.replace(/^"(.*)"$/, '$1');
@@ -255,11 +271,15 @@ export class ComponentParser implements Parser {
                     const dashMatch = stripped.match(/(-+|\.+)/);
                     if (dashMatch) {
                         const len = dashMatch[1].length;
-                        direction = len >= 2 ? 'down' : 'right';
+                        if (hasReverse && !hasForward) {
+                            direction = len >= 2 ? 'up' : 'left';
+                        } else {
+                            direction = len >= 2 ? 'down' : 'right';
+                        }
                     }
                 }
 
-                const hasArrowHead = arrow.includes('>');
+                const hasArrowHead = hasForward || hasReverse;
                 diagram.addRelationship(id1, id2, type, label, direction, hasArrowHead, currentParentId);
                 continue;
             }
