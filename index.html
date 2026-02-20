@@ -1324,6 +1324,7 @@ deactivate App`
         let timeout;
         editor.addEventListener('input', () => {
             clearTimeout(timeout);
+            localStorage.setItem('seeduml_playground', editor.value);
             timeout = setTimeout(render, 300);
         });
 
@@ -1399,6 +1400,10 @@ deactivate App`
             comp_ports: {
                 title: "Ports",
                 code: `[c]\ncomponent C {\n  portin p1\n  portin p2\n  portin p3\n  component c1\n}\nc --> p1\nc --> p2\nc --> p3\np1 --> c1\np2 --> c1`
+            },
+            comp_position_hints: {
+                title: "Position Hints (Extended)",
+                code: `[Web Server] as Web\n[API Gateway] left of Web\n[Database] below Web\n[Load Balancer] above Web\n[Cache] right of Web\n\n[API Gateway] --> [Web]\n[Web] --> [Database]\n[Load Balancer] --> [Web]\n[Web] --> [Cache]`
             }
         };
 
@@ -1447,6 +1452,7 @@ deactivate App`
 
             item.addEventListener('click', () => {
                 editor.value = sample.code;
+                localStorage.setItem('seeduml_playground', editor.value);
                 render();
                 document.getElementById('playground').scrollIntoView({ behavior: 'smooth' });
             });
@@ -1456,6 +1462,10 @@ deactivate App`
 
         // Initial Load
         window.addEventListener('load', () => {
+            const savedCode = localStorage.getItem('seeduml_playground');
+            if (savedCode) {
+                editor.value = savedCode;
+            }
             render();
             if (window.seeduml) {
                 initGallery();

@@ -1644,7 +1644,15 @@ var ComponentDiagram = class {
   addComponent(name, type, label, parentId, color) {
     let component = this.components.find((c) => c.name === name);
     if (!component) {
-      component = { name, type, label: label || name, isVisible: true, parentId, color };
+      component = {
+        name,
+        type,
+        label: label || name,
+        isVisible: true,
+        parentId,
+        color,
+        declarationOrder: this.components.length
+      };
       this.components.push(component);
     } else {
       if (label) component.label = label;
@@ -1747,6 +1755,21 @@ var ComponentParser = class {
         continue;
       }
       const currentParentId = parentStack.length > 0 ? parentStack[parentStack.length - 1] : void 0;
+      const posHintMatch = line.match(/^\[([^\]]+)\]\s+(left\s+of|right\s+of|top\s+of|bottom\s+of)\s+\[([^\]]+)\](?:\s+(#\w+))?$/i);
+      if (posHintMatch) {
+        const name = posHintMatch[1];
+        const posRaw = posHintMatch[2].toLowerCase().replace(/\s+of$/, "");
+        const refName = posHintMatch[3];
+        const color = posHintMatch[4];
+        let position;
+        if (posRaw === "left") position = "left";
+        else if (posRaw === "right") position = "right";
+        else if (posRaw === "top") position = "top";
+        else position = "bottom";
+        const comp = diagram.addComponent(name, "component", name, currentParentId, this.parseColor(color));
+        comp.positionHint = { reference: refName, position };
+        continue;
+      }
       const componentMatch = line.match(/^component\s+(?:\[(.*?)\]|(".*?"|\S+))(?:\s+as\s+(\S+))?(?:\s+(#\w+))?(?:\s*\[)?$/i);
       if (componentMatch) {
         const bracketName = componentMatch[1];
@@ -1822,18 +1845,36 @@ var ComponentParser = class {
         diagram.addComponent(alias || name, componentType, name, currentParentId);
         continue;
       }
-      const componentRef = `(?:\\[([^\\]]+)\\]|(".*?"|[^\\s-]+))`;
-      const arrowRef = `([-.]+[^[\\]\\s]*)`;
-      const separator = `(?:\\s+|(?<=[^\\s])(?=[-.])|(?<=[-.])(?=[^\\s]))`;
+      const componentRef = `(\\(\\)\\s+)?(?:\\[([^\\]]+)\\]|(".*?"|[^\\s-]+))`;
+      const arrowRef = `([<>]*[-.]+[<>]*[^[\\]\\s]*)`;
+      const separator = `(?:\\s+|(?<=[^\\s])(?=[<\\-.>])|(?<=[<\\-.>])(?=[^\\s]))`;
       const relRegex = new RegExp(`^${componentRef}${separator}${arrowRef}${separator}${componentRef}(?:\\s*:\\s*(.*))?$`);
       const relMatch = line.match(relRegex);
       if (relMatch) {
-        const id1Raw = relMatch[1] || relMatch[2];
-        const isId1Bracketed = !!relMatch[1];
-        const arrow = relMatch[3];
-        const id2Raw = relMatch[4] || relMatch[5];
-        const isId2Bracketed = !!relMatch[4];
-        const label = relMatch[6];
+        const isParens1 = !!relMatch[1];
+        const id1RawVal = relMatch[2] || relMatch[3];
+        const isId1BracketedVal = !!relMatch[2];
+        const arrow = relMatch[4];
+        const isParens2 = !!relMatch[5];
+        const id2RawVal = relMatch[6] || relMatch[7];
+        const isId2BracketedVal = !!relMatch[6];
+        const label = relMatch[8];
+        let id1Raw = id1RawVal;
+        let id2Raw = id2RawVal;
+        let isId1Bracketed = isId1BracketedVal;
+        let isId2Bracketed = isId2BracketedVal;
+        let isId1Parens = isParens1;
+        let isId2Parens = isParens2;
+        const hasReverse = arrow.includes("<");
+        const hasForward = arrow.includes(">");
+        if (hasReverse && !hasForward) {
+          id1Raw = id2RawVal;
+          id2Raw = id1RawVal;
+          isId1Bracketed = isId2BracketedVal;
+          isId2Bracketed = isId1BracketedVal;
+          isId1Parens = isParens2;
+          isId2Parens = isParens1;
+        }
         const id1 = id1Raw.replace(/^"(.*)"$/, "$1");
         const id2 = id2Raw.replace(/^"(.*)"$/, "$1");
         if (!diagram.components.some((c) => c.name === id1) && !noteAliases.has(id1)) {
@@ -1857,10 +1898,14 @@ var ComponentParser = class {
           const dashMatch = stripped.match(/(-+|\.+)/);
           if (dashMatch) {
             const len = dashMatch[1].length;
-            direction = len >= 2 ? "down" : "right";
+            if (hasReverse && !hasForward) {
+              direction = len >= 2 ? "up" : "left";
+            } else {
+              direction = len >= 2 ? "down" : "right";
+            }
           }
         }
-        const hasArrowHead = arrow.includes(">");
+        const hasArrowHead = hasForward || hasReverse;
         diagram.addRelationship(id1, id2, type, label, direction, hasArrowHead, currentParentId);
         continue;
       }
@@ -1975,6 +2020,11 @@ var ComponentLayout = class {
     };
   }
   straightenVerticalLines(nodes) {
+    const hasPositionBinding = /* @__PURE__ */ new Set();
+    this.diagram.components.filter((c) => c.positionHint).forEach((c) => {
+      hasPositionBinding.add(c.name);
+      hasPositionBinding.add(c.positionHint.reference);
+    });
     const vRels = this.diagram.relationships.filter((r) => !r.direction || r.direction === "down" || r.direction === "up");
     if (vRels.length === 0) return;
     for (let iter = 0; iter < 50; iter++) {
@@ -1995,6 +2045,7 @@ var ComponentLayout = class {
         const nodeFrom = this.getAncestorUnder(rel.from, lcp);
         const nodeTo = this.getAncestorUnder(rel.to, lcp);
         if (nodeFrom && nodeTo && nodeFrom !== nodeTo) {
+          if (hasPositionBinding.has(nodeFrom) || hasPositionBinding.has(nodeTo)) return;
           if (!shifts.has(nodeFrom)) shifts.set(nodeFrom, { totalShift: 0, count: 0 });
           if (!shifts.has(nodeTo)) shifts.set(nodeTo, { totalShift: 0, count: 0 });
           const sFrom = shifts.get(nodeFrom);
@@ -2074,9 +2125,11 @@ var ComponentLayout = class {
         width = this.theme.interfaceRadius * 2;
         height = this.theme.interfaceRadius * 2;
         const label = comp.label || comp.name;
-        const textWidth = label.length * 8;
+        const lines = label.split(/\\n|\n/);
+        const maxLineLen = Math.max(...lines.map((l) => l.length));
+        const textWidth = maxLineLen * 8;
         width = Math.max(width, textWidth);
-        height += 20;
+        height += lines.length * 20;
       } else {
         const allChildren = this.diagram.components.filter((c) => c.parentId === comp.name);
         const ports = allChildren.filter((c) => c.type === "port" || c.type === "portin" || c.type === "portout");
@@ -2097,6 +2150,48 @@ var ComponentLayout = class {
     });
     const compNames = new Set(components.map((c) => c.name));
     const gridPos = /* @__PURE__ */ new Map();
+    const isOccupied = (pos, grid) => {
+      for (const p of grid.values()) {
+        if (p.row === pos.row && p.col === pos.col) return true;
+      }
+      return false;
+    };
+    const hintsToProcess = components.filter((c) => c.positionHint).sort((a, b) => a.declarationOrder - b.declarationOrder);
+    for (const comp of hintsToProcess) {
+      const hint = comp.positionHint;
+      const refComp = components.find((c) => c.name === hint.reference);
+      if (!refComp) continue;
+      if (!gridPos.has(hint.reference)) {
+        gridPos.set(hint.reference, { row: 0, col: 0 });
+      }
+      const refPos = gridPos.get(hint.reference);
+      let targetPos;
+      switch (hint.position) {
+        case "right":
+          targetPos = { row: refPos.row, col: refPos.col + 1 };
+          break;
+        case "left":
+          targetPos = { row: refPos.row, col: refPos.col - 1 };
+          break;
+        case "bottom":
+          targetPos = { row: refPos.row + 1, col: refPos.col };
+          break;
+        case "top":
+          targetPos = { row: refPos.row - 1, col: refPos.col };
+          break;
+        default:
+          targetPos = { row: refPos.row + 1, col: refPos.col };
+          break;
+      }
+      while (isOccupied(targetPos, gridPos)) {
+        if (hint.position === "left") targetPos.col--;
+        else if (hint.position === "right") targetPos.col++;
+        else if (hint.position === "top") targetPos.row--;
+        else if (hint.position === "bottom") targetPos.row++;
+        else targetPos.col++;
+      }
+      gridPos.set(comp.name, targetPos);
+    }
     const descendantToAncestor = /* @__PURE__ */ new Map();
     components.forEach((comp) => {
       descendantToAncestor.set(comp.name, comp.name);
@@ -2131,10 +2226,23 @@ var ComponentLayout = class {
         adj.get(r.to).push({ target: r.from, direction: revDir });
       });
       const queue = [];
-      const roots = components.filter((c) => !relevantRels.some((r) => r.to === c.name));
-      const startNode = roots.length > 0 ? roots[0].name : relevantRels[0].from;
-      gridPos.set(startNode, { row: 0, col: 0 });
-      queue.push(startNode);
+      for (const name of gridPos.keys()) {
+        queue.push(name);
+      }
+      const roots = components.filter((c) => !relevantRels.some((r) => r.to === c.name)).sort((a, b) => a.declarationOrder - b.declarationOrder);
+      if (queue.length === 0) {
+        const startNode = roots.length > 0 ? roots[0].name : relevantRels[0].from;
+        gridPos.set(startNode, { row: 0, col: 0 });
+        queue.push(startNode);
+      }
+      for (const root of roots) {
+        if (!gridPos.has(root.name) && relevantRels.some((r) => r.from === root.name || r.to === root.name)) {
+          let col = 0;
+          while (isOccupied({ row: 0, col }, gridPos)) col++;
+          gridPos.set(root.name, { row: 0, col });
+          queue.push(root.name);
+        }
+      }
       const visited = /* @__PURE__ */ new Set();
       while (queue.length > 0) {
         const current = queue.shift();
@@ -2150,7 +2258,12 @@ var ComponentLayout = class {
           }
         });
         byDir.forEach((targets, dir) => {
-          targets.forEach((target, i) => {
+          const sortedTargets = targets.sort((a, b) => {
+            const compA = components.find((c) => c.name === a);
+            const compB = components.find((c) => c.name === b);
+            return (compA?.declarationOrder ?? 0) - (compB?.declarationOrder ?? 0);
+          });
+          sortedTargets.forEach((target, i) => {
             let row = currentPos.row;
             let col = currentPos.col;
             const offset = targets.length === 1 ? 0 : i - (targets.length - 1) / 2;
@@ -2172,11 +2285,7 @@ var ComponentLayout = class {
                 row += Math.round(offset * 1.5);
                 break;
             }
-            const isTaken = (r, c) => {
-              for (const p of gridPos.values()) if (p.row === r && p.col === c) return true;
-              return false;
-            };
-            while (isTaken(row, col)) {
+            while (isOccupied({ row, col }, gridPos)) {
               if (dir === "down" || dir === "up") col++;
               else row++;
             }
@@ -2186,7 +2295,7 @@ var ComponentLayout = class {
         });
       }
     }
-    const unpositioned = components.filter((c) => !gridPos.has(c.name));
+    const unpositioned = components.filter((c) => !gridPos.has(c.name)).sort((a, b) => a.declarationOrder - b.declarationOrder);
     if (unpositioned.length > 0) {
       let maxRow2 = -1;
       gridPos.forEach((pos) => maxRow2 = Math.max(maxRow2, pos.row));
@@ -2199,7 +2308,13 @@ var ComponentLayout = class {
         });
       });
     }
+    const hasPositionBinding = /* @__PURE__ */ new Set();
+    components.filter((c) => c.positionHint).forEach((c) => {
+      hasPositionBinding.add(c.name);
+      hasPositionBinding.add(c.positionHint.reference);
+    });
     components.forEach((comp) => {
+      if (hasPositionBinding.has(comp.name)) return;
       const rels = relevantRels.filter((r) => r.from === comp.name && r.direction === "down");
       if (rels.length > 0) {
         const pos = gridPos.get(comp.name);
@@ -2355,8 +2470,8 @@ var ComponentLayout = class {
       x: toRect.x + toRect.width / 2,
       y: toRect.y + toRect.height / 2
     };
-    const startPad = fromComp?.type === "interface" ? this.theme.interfaceRadius + 2 : 5;
-    const endPad = toComp?.type === "interface" ? this.theme.interfaceRadius + 2 : 10;
+    const startPad = fromComp?.type === "interface" ? this.theme.interfaceRadius : 0;
+    const endPad = toComp?.type === "interface" ? this.theme.interfaceRadius : 0;
     const start = this.getIntersection(startCenter, endCenter, fromRect, startPad, fromComp?.type === "interface");
     const end = this.getIntersection(endCenter, startCenter, toRect, endPad, toComp?.type === "interface");
     return {
@@ -2663,17 +2778,18 @@ var ComponentSVGRenderer = class {
             </g>
         `;
   }
-  /** SysML Interface: Lollipop (provided interface) */
   renderInterface(node) {
     const { x, y, width, height, component } = node;
     const r = this.theme.interfaceRadius;
     const cx = x + width / 2;
     const cy = y + height / 2;
+    const label = component.label || component.name;
+    const lines = label.split(/\\n|\n/);
     return `
             <g>
                 <circle cx="${cx}" cy="${cy}" r="${r}" fill="${this.theme.colors.interfaceFill}" stroke="${this.theme.colors.defaultStroke}" stroke-width="1.5"/>
                 <text x="${cx}" y="${cy + r + 16}" text-anchor="middle" fill="${this.theme.colors.text}" font-family="${this.theme.fontFamily}" font-size="${this.theme.fontSize}">
-                    ${this.escapeXml(component.label || component.name)}
+                    ${lines.map((line, i) => `<tspan x="${cx}" dy="${i === 0 ? 0 : "1.2em"}">${this.escapeXml(line)}</tspan>`).join("")}
                 </text>
             </g>
         `;
@@ -2739,8 +2855,10 @@ var ComponentSVGRenderer = class {
   renderFrame(node) {
     const { x, y, width, height, component } = node;
     const label = component.label || component.name;
-    const tagW = Math.min(label.length * 8 + 24, width * 0.6);
-    const tagH = 22;
+    const lines = label.split(/\\n|\n/);
+    const maxLineLen = Math.max(...lines.map((l) => l.length));
+    const tagW = Math.min(maxLineLen * 8 + 24, width * 0.6);
+    const tagH = 22 + (lines.length - 1) * 14;
     return `
             <g filter="url(#comp-shadow)">
                 <!-- Frame body -->
@@ -2748,7 +2866,7 @@ var ComponentSVGRenderer = class {
                 <!-- Pentagon name tag -->
                 <polygon points="${x},${y} ${x + tagW},${y} ${x + tagW},${y + tagH - 6} ${x + tagW - 6},${y + tagH} ${x},${y + tagH}" fill="${this.theme.colors.frameFill}" stroke="${this.theme.colors.defaultStroke}" stroke-width="1.3" />
                 <text x="${x + 8}" y="${y + 15}" text-anchor="start" font-weight="600" fill="${this.theme.colors.text}" font-family="${this.theme.fontFamily}" font-size="${this.theme.fontSize - 1}">
-                    ${this.escapeXml(label)}
+                    ${lines.map((line, i) => `<tspan x="${x + 8}" dy="${i === 0 ? 0 : "1.2em"}">${this.escapeXml(line)}</tspan>`).join("")}
                 </text>
             </g>
         `;
@@ -2757,6 +2875,7 @@ var ComponentSVGRenderer = class {
   renderCloud(node) {
     const { x, y, width, height, component } = node;
     const label = component.label || component.name;
+    const lines = label.split(/\\n|\n/);
     const cx = width / 2;
     const cy = height / 2;
     const w = width;
@@ -2773,8 +2892,8 @@ var ComponentSVGRenderer = class {
                     C${w * 0.6},${h * 0.9} ${w * 0.4},${h * 0.9} ${w * 0.25},${h * 0.7}
                     Z
                 " fill="${this.theme.colors.cloudFill}" fill-opacity="0.5" stroke="${this.theme.colors.packageStroke}" stroke-width="1.5" />
-                ${label ? `<text x="${cx}" y="${cy + 5}" text-anchor="middle" dominant-baseline="middle" font-weight="600" fill="${this.theme.colors.text}" font-family="${this.theme.fontFamily}" font-size="${this.theme.fontSize}">
-                    ${this.escapeXml(label)}
+                ${label ? `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-weight="600" fill="${this.theme.colors.text}" font-family="${this.theme.fontFamily}" font-size="${this.theme.fontSize}">
+                    ${lines.map((line, i) => `<tspan x="${cx}" dy="${i === 0 ? -((lines.length - 1) * 0.6) + "em" : "1.2em"}">${this.escapeXml(line)}</tspan>`).join("")}
                 </text>` : ""}
             </g>
         `;
@@ -2783,6 +2902,7 @@ var ComponentSVGRenderer = class {
   renderDatabase(node) {
     const { x, y, width, height, component } = node;
     const label = component.label || component.name;
+    const lines = label.split(/\\n|\n/);
     const ry = 12;
     return `
             <g transform="translate(${x}, ${y})" filter="url(#comp-shadow)">
@@ -2796,7 +2916,7 @@ var ComponentSVGRenderer = class {
                 <!-- Top ellipse (drawn last to overlay body) -->
                 <ellipse cx="${width / 2}" cy="${ry}" rx="${width / 2}" ry="${ry}" fill="${this.theme.colors.databaseFill}" stroke="${this.theme.colors.packageStroke}" stroke-width="1.5" />
                 ${label ? `<text x="${width / 2}" y="${ry + 20}" text-anchor="middle" font-weight="600" fill="${this.theme.colors.text}" font-family="${this.theme.fontFamily}" font-size="${this.theme.fontSize}">
-                    ${this.escapeXml(label)}
+                    ${lines.map((line, i) => `<tspan x="${width / 2}" dy="${i === 0 ? 0 : "1.2em"}">${this.escapeXml(line)}</tspan>`).join("")}
                 </text>` : ""}
             </g>
         `;
@@ -2862,23 +2982,23 @@ var ComponentSVGRenderer = class {
         const padding = 10;
         if (Math.abs(dx) >= Math.abs(dy)) {
           if (dx > 0) {
-            tx = x - padding / 2;
-            ty = cy;
-            anchor = "end";
-          } else {
             tx = x + width + padding / 2;
             ty = cy;
             anchor = "start";
+          } else {
+            tx = x - padding / 2;
+            ty = cy;
+            anchor = "end";
           }
         } else {
           if (dy > 0) {
             tx = cx;
-            ty = y - padding / 2;
-            baseline = "auto";
-          } else {
-            tx = cx;
             ty = y + height + padding;
             baseline = "hanging";
+          } else {
+            tx = cx;
+            ty = y - padding / 2;
+            baseline = "auto";
           }
         }
         const label = component.label || component.name;
@@ -2928,11 +3048,11 @@ function renderError(e) {
     `.trim();
 }
 function render(content) {
-  const isComponent = /\b(component|interface|package|node|cloud|database|frame|folder|\[.*?\])\b/.test(content);
+  const isComponent = /\b(component|interface|package|node|cloud|database|frame|folder)\b|\[.*?\]/.test(content);
   const isSequence = /\b(participant|actor|boundary|control|entity|collections|queue|sequence)\b/.test(content);
   if (isComponent && !isSequence) return renderComponentDiagram(content);
   if (!isComponent && isSequence) return renderSequenceDiagram(content);
-  if (/^\[.*?\]/m.test(content)) return renderComponentDiagram(content);
+  if (/\[.*?\]/.test(content)) return renderComponentDiagram(content);
   return renderSequenceDiagram(content);
 }
 function renderAll(selector = "pre.seeduml") {
