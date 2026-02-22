@@ -417,7 +417,7 @@ export class ComponentRenderer implements Renderer {
 
         return `
             <g>
-                <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" stroke="${this.theme.colors.defaultStroke}" stroke-width="1" />
+                <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${this.theme.colors.defaultFill}" stroke="${this.theme.colors.defaultStroke}" stroke-width="1" />
                 ${labelSvg}
             </g>
         `;
