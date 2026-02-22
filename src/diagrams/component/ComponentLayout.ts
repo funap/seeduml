@@ -174,6 +174,9 @@ export class ComponentLayout {
                 const toRect = this.layoutMap.get(rel.to);
                 if (!fromRect || !toRect) return;
 
+                // Only straighten if they are on different vertical levels
+                if (Math.abs(toRect.y - fromRect.y) < 10) return;
+
                 const fromX = fromRect.x + fromRect.width / 2;
                 const toX = toRect.x + toRect.width / 2;
                 const error = toX - fromX;
@@ -397,17 +400,19 @@ export class ComponentLayout {
         });
 
         // BFS to assign positions based on directions
+        // For positioning, each target node should only be placed by its first
+        // relationship (document order). Later relationships to the same target
+        // are excluded from the adjacency list to prevent overriding.
+        const adj = new Map<string, { target: string, direction: string }[]>();
         if (relevantRels.length > 0) {
-            const adj = new Map<string, { target: string, direction: string }[]>();
+            const targetClaimed = new Set<string>();
             relevantRels.forEach(r => {
                 const dir = r.direction || 'down';
-                if (!adj.has(r.from)) adj.set(r.from, []);
-                adj.get(r.from)!.push({ target: r.to, direction: dir });
-
-                // Reverse adj for BFS traversal back-hints, but marked as reverse
-                if (!adj.has(r.to)) adj.set(r.to, []);
-                const revDir = dir === 'down' ? 'up' : dir === 'up' ? 'down' : dir === 'right' ? 'left' : 'right';
-                adj.get(r.to)!.push({ target: r.from, direction: revDir });
+                if (!targetClaimed.has(r.to)) {
+                    targetClaimed.add(r.to);
+                    if (!adj.has(r.from)) adj.set(r.from, []);
+                    adj.get(r.from)!.push({ target: r.to, direction: dir });
+                }
             });
 
             const queue: string[] = [];
@@ -431,7 +436,6 @@ export class ComponentLayout {
                         }
                     });
 
-                    // Symmetrical Distribution
                     byDir.forEach((targets, dir) => {
                         const sortedTargets = targets.sort((a, b) => {
                             const compA = components.find(c => c.name === a);
@@ -535,13 +539,23 @@ export class ComponentLayout {
         });
 
         // Phase 3: Global Alignment Polish
+        // Use adj (positioning relationships) instead of relevantRels to avoid
+        // alignment based on relationships that don't determine layout position.
         components.forEach(comp => {
             if (hasPositionBinding.has(comp.name)) return;
-            const rels = relevantRels.filter(r => r.from === comp.name && r.direction === 'down');
-            if (rels.length > 0) { // Even single child should try to align
+            const neighbors = (adj.get(comp.name) || []).filter(n => n.direction === 'down');
+            if (neighbors.length > 0) {
                 const pos = gridPos.get(comp.name);
                 if (pos) {
-                    const childrenCols = rels.map(r => gridPos.get(r.to)?.col).filter(c => c !== undefined) as number[];
+                    const childrenCols = neighbors.map(n => {
+                        const targetPos = gridPos.get(n.target);
+                        // Only align if child is on a different row
+                        if (targetPos && targetPos.row !== pos.row) {
+                            return targetPos.col;
+                        }
+                        return undefined;
+                    }).filter(c => c !== undefined) as number[];
+
                     if (childrenCols.length > 0) {
                         const avgCol = childrenCols.reduce((a, b) => a + b, 0) / childrenCols.length;
                         pos.col = Math.round(avgCol);
@@ -600,12 +614,6 @@ export class ComponentLayout {
         for (let r = 1; r <= maxRow; r++) {
             rowStarts[r] = rowStarts[r - 1] + rowHeights[r - 1] + this.theme.componentGapY;
         }
-
-        console.log('--- Grid Layout Details ---');
-        console.log('Col Widths:', colWidths);
-        console.log('Col Starts:', colStarts);
-        console.log('Row Heights:', rowHeights);
-        console.log('Row Starts:', rowStarts);
 
         // First pass: Position all components to establish their centers
         components.forEach(comp => {
