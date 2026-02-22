@@ -107,7 +107,7 @@ export class ComponentRenderer implements Renderer {
         // Component icon dimensions
         const iconW = 14;
         const iconH = 18;
-        const iconX = 6;
+        const iconX = width - 20;
         const iconY = 6;
         const tabW = 8;
         const tabH = 5;
